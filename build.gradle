@@ -1,0 +1,42 @@
+plugins {
+    id 'idea'
+    id 'groovy'
+    id 'com.gradle.plugin-publish' version '0.9.7'
+    id 'com.palantir.git-version' version '0.8.0'
+    id 'maven'
+}
+
+project.version = gitVersion()
+project.group = 'com.jetbrains.ruby'
+
+sourceCompatibility = '1.6'
+targetCompatibility = '1.6'
+
+repositories {
+    jcenter()
+}
+
+uploadArchives {
+    repositories {
+        maven {
+            url uri('../mvn_repo')
+        }
+    }
+}
+
+dependencies {
+    compile gradleApi()
+}
+
+pluginBundle {
+    website = 'https://github.com/JetBrains/gradle-ruby-envs'
+    vcsUrl = 'https://github.com/JetBrains/gradle-ruby-envs'
+    description = 'Gradle plugin to install different Ruby environments'
+    tags = ['ruby']
+    plugins {
+        pythonEnvsPlugin {
+            id = 'com.jetbrains.ruby.envs'
+            displayName = 'Gradle Ruby Envs plugin'
+        }
+    }
+}
