@@ -5,20 +5,26 @@ package com.jetbrains.ruby.envs
  *
  */
 class RubyEnvsExtension {
-    File rvmDirectory
+    File bootstrapDirectory
+    File envsDirectory
 
     List<Ruby> rubies = []
 
-    void ruby(final String version) {
-        rubies << new Ruby(version)
+    void ruby(final String version, final String tool) {
+        assert tool in ["rvm", "rbenv"]
+        rubies << new Ruby(version, tool, envsDirectory)
     }
 }
 
 
 class Ruby {
     final String version
+    final String tool
+    final File dir
 
-    Ruby(String version = null) {
+    Ruby(String version, String tool, File envsDir = null) {
         this.version = version
+        this.tool = tool
+        this.dir = new File(envsDir, version)
     }
 }
