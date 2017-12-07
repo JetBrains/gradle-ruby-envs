@@ -5,6 +5,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.tasks.Delete
+import org.gradle.util.VersionNumber
 
 class RubyEnvsPlugin implements Plugin<Project> {
     private static Boolean isWindows = Os.isFamily(Os.FAMILY_WINDOWS)
@@ -12,6 +13,7 @@ class RubyEnvsPlugin implements Plugin<Project> {
 
     private static rvmFolderName = "rvm"
     private static rubyBuildFolderName = "ruby-build"
+    private static rubyDevKitFolderName = "devkit"
 
     private static Task createInstallRvmTask(Project project, File installDir) {
         return project.tasks.create(name: 'install_rvm') {
@@ -62,6 +64,36 @@ class RubyEnvsPlugin implements Plugin<Project> {
                 "$rubyBuildFolderName/bin/ruby-build")
     }
 
+    private static Task createInstallDevKitTask(Project project, File installDir) {
+        return project.tasks.create(name: 'install_devkit') {
+            onlyIf {
+                !installDir.exists() && isWindows
+            }
+
+            doLast {
+                File devKit = new File(project.buildDir, "devkit.exe")
+                project.logger.quiet("Downloading DevKit")
+                project.ant.get(dest: devKit) {
+                    if (ruby.is64) {
+                        url(url: "https://dl.bintray.com/oneclick/rubyinstaller/DevKit-mingw64-64-4.7.2-20130224-1432-sfx.exe")
+                    } else {
+                        url(url: "https://dl.bintray.com/oneclick/rubyinstaller/DevKit-mingw64-32-4.7.2-20130224-1151-sfx.exe")
+                    }
+                }
+
+                project.logger.quiet("Installing DevKit to $installDir")
+                executePlainCommand(project, "$devKit -o\"$installDir\" -y")
+
+                devKit.delete()
+            }
+        }
+    }
+
+    private static File getDevKitFolder(Project project) {
+        return new File(project.extensions.findByName("envs").getProperty("bootstrapDirectory") as File,
+                rubyDevKitFolderName)
+    }
+
     private static Task createRubyUnixTask(Project project, Ruby ruby) {
         return project.tasks.create(name: "Bootstrap Ruby $ruby.version via $ruby.tool") {
             switch (ruby.tool) {
@@ -96,6 +128,47 @@ class RubyEnvsPlugin implements Plugin<Project> {
         }
     }
 
+    private static Task createRubyWindowsTask(Project project, Ruby ruby) {
+        return project.tasks.create(name: "Bootstrap Ruby $ruby.version") {
+            if (VersionNumber.parse(ruby.version) < VersionNumber.parse("2.4")) {
+                dependsOn "install_devkit"
+            }
+
+            onlyIf {
+                !ruby.dir.exists() && isWindows
+            }
+
+            doLast {
+                String urlString
+                if (VersionNumber.parse(ruby.version) >= VersionNumber.parse("2.4")) {
+                    String architecture = { if (ruby.is64) "x64" else "x86" }.call()
+                    urlString = "https://github.com/oneclick/rubyinstaller2/releases/download/rubyinstaller-$ruby.version/rubyinstaller-$ruby.version-${architecture}.exe"
+                } else {
+                    String architecture = { if (ruby.is64) "x64" else "i386" }.call()
+                    urlString = "https://dl.bintray.com/oneclick/rubyinstaller/rubyinstaller-$ruby.version-${architecture}.exe"
+                }
+
+                String installerName = urlString.substring(urlString.lastIndexOf('/') + 1, urlString.length())
+                File installer = new File(project.buildDir, installerName)
+                project.logger.quiet("Downloading $installerName installer from $urlString")
+                project.ant.get(dest: installer) {
+                    url(url: urlString)
+                }
+
+                executePlainCommand(project, "$installer /verysilent /dir=\"$ruby.dir\"")
+
+                installer.delete()
+
+                if (VersionNumber.parse(ruby.version) < VersionNumber.parse("2.4")) {
+                    File devKitFolder = new File(project.extensions.findByName("envs").getProperty("bootstrapDirectory") as File,
+                            rubyDevKitFolderName)
+                    executePlainCommand(project, "$ruby.dir\\bin\\ruby.exe dk.rb init --force", devKitFolder)
+                    executePlainCommand(project, "$ruby.dir\\bin\\ruby.exe dk.rb install", devKitFolder)
+                }
+            }
+        }
+    }
+
     @Override
     void apply(Project project) {
         project.mkdir(project.buildDir)
@@ -104,6 +177,7 @@ class RubyEnvsPlugin implements Plugin<Project> {
         project.afterEvaluate {
             createInstallRvmTask(project, new File(envs.bootstrapDirectory, rvmFolderName))
             createInstallRubyBuildTask(project, new File(envs.bootstrapDirectory, rubyBuildFolderName))
+            createInstallDevKitTask(project, new File(envs.bootstrapDirectory, rubyDevKitFolderName))
 
             project.tasks.create(name: "clean_directories", type: Delete) {
                 delete envs.bootstrapDirectory
@@ -117,11 +191,18 @@ class RubyEnvsPlugin implements Plugin<Project> {
                     if (isUnix) {
                         dependsOn createRubyUnixTask(project, ruby)
                     } else if (isWindows) {
-                        // TODO
+                        dependsOn createRubyWindowsTask(project, ruby)
                     }
                 }
             }
         }
     }
 
+    private static void executePlainCommand(Project project, String command, File workDir = null) {
+        project.logger.quiet("Executing '$command'")
+        project.exec {
+            commandLine command.split(" ")
+            if (workDir != null) workingDir workDir
+        }
+    }
 }
