@@ -15,10 +15,10 @@ class RubyEnvsExtension {
 
     List<Ruby> rubies = []
 
-    void ruby(final String version, final String architecture = null, final String tool = null) {
+    void ruby(final String version, final String tool = null, final String architecture = null) {
         assert VersionNumber.parse(version) >= VersionNumber.parse("2.0") :
                 "Versions lower 2.0 aren't supported"
-        if (tool != null && Os.isFamily(Os.FAMILY_UNIX)) assert tool in ["rvm", "rbenv"] :
+        if (Os.isFamily(Os.FAMILY_UNIX)) assert tool in ["rvm", "rbenv"] :
                 "Only rvm and rbenv (ruby-build) for Unix are supported"
         rubies << new Ruby(version, envsDirectory, is64(architecture), tool)
     }
