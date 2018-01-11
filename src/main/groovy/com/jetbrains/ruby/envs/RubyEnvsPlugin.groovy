@@ -36,6 +36,11 @@ class RubyEnvsPlugin implements Plugin<Project> {
 
     private static File getRvmExecutable(Project project) {
         return new File(project.extensions.findByName("envs").getProperty("bootstrapDirectory") as File,
+                "$rvmFolderName/bin/rvm")
+    }
+
+    private static File getRvmScriptExecutable(Project project) {
+        return new File(project.extensions.findByName("envs").getProperty("bootstrapDirectory") as File,
                 "$rvmFolderName/scripts/rvm")
     }
 
@@ -90,11 +95,6 @@ class RubyEnvsPlugin implements Plugin<Project> {
         }
     }
 
-    private static File getDevKitFolder(Project project) {
-        return new File(project.extensions.findByName("envs").getProperty("bootstrapDirectory") as File,
-                rubyDevKitFolderName)
-    }
-
     private static Task createRubyUnixTask(Project project, Ruby ruby) {
         return project.tasks.create(name: "Bootstrap Ruby $ruby.version via $ruby.tool") {
             switch (ruby.tool) {
@@ -102,11 +102,12 @@ class RubyEnvsPlugin implements Plugin<Project> {
                     dependsOn "install_rvm"
 
                     doLast {
-                        String command = "source '${getRvmExecutable(project)}' && " +
-                                "rvm install $ruby.version --autolibs=read-only"
+                        String command = "source '${getRvmScriptExecutable(project)}' && " +
+                                "${getRvmExecutable(project)} install $ruby.version --autolibs=read-only"
                         project.logger.quiet("Executing '$command'")
                         project.exec {
                             commandLine "bash", "-c", command
+                            environment PATH: "/bin:/usr/bin", GEM_HOME: "", GEM_PATH: "", rvm_path: ""
                         }
                     }
 
